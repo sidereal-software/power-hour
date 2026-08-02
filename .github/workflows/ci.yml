@@ -27,6 +27,8 @@ jobs:
       - name: Type-check
         run: npm run typecheck
 
+      # oxlint's type-aware mode drives the native TypeScript compiler (tsgo),
+      # which is why this project can sit on TypeScript 7.
       - name: Lint
         run: npm run lint
 

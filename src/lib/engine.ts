@@ -8,6 +8,7 @@ import * as api from './api'
 import * as playback from './playback'
 import { playChime, playTick, type ChimeName } from './chime'
 import { ApiError } from './api'
+import { errorMessage } from './errors'
 import type { SpotifyTrack } from './spotify-types'
 
 const TICK_MS = 200
@@ -190,9 +191,9 @@ export function createGame({
       if (mine !== generation) return // skipped/rerolled while this was in flight
     } catch (err) {
       if (mine !== generation) return
-      const status = err instanceof ApiError ? err.status : 0
+      const httpStatus = err instanceof ApiError ? err.status : 0
       // Device went stale (tab backgrounded, Spotify moved playback elsewhere).
-      if (status === 404 || status === 502) {
+      if (httpStatus === 404 || httpStatus === 502) {
         try {
           await api.transferPlayback(deviceId, false)
           await api.play(deviceId, track.uri, positionMs)
@@ -201,12 +202,12 @@ export function createGame({
             'Lost the browser playback device. Check that Spotify is not playing on another device, then press Resume.',
           )
         }
-      } else if (status === 403) {
+      } else if (httpStatus === 403) {
         return on.error?.(
           'Spotify refused playback. This usually means the account is not Premium.',
         )
       } else {
-        return on.error?.(`Could not start the track: ${(err as Error).message}`)
+        return on.error?.(`Could not start the track: ${errorMessage(err)}`)
       }
     }
 
@@ -220,7 +221,10 @@ export function createGame({
     clearInterval(timer)
     timer = setInterval(() => {
       const remaining = deadline - performance.now()
-      if (remaining <= 0) return nextRound()
+      if (remaining <= 0) {
+        nextRound()
+        return
+      }
 
       const secondsLeft = Math.ceil(remaining / 1000)
       if (secondsLeft !== lastTickSecond) {
@@ -243,7 +247,10 @@ export function createGame({
     // which is how a real power hour sounds.
     playChime(chime)
     index += 1
-    if (index >= totalRounds) return void finish()
+    if (index >= totalRounds) {
+      void finish()
+      return
+    }
     void startTrack()
   }
 

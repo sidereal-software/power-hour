@@ -10,8 +10,8 @@ npm run dev            # Vite dev server, http://localhost:5173/
 npm run build          # tsc -b (type-check) && vite build → dist/
 npm run preview        # serve the production build
 
-npm run typecheck      # types only
-npm run lint           # ESLint (type-aware)
+npm run typecheck      # types only (TypeScript 7, native)
+npm run lint           # oxlint, type-aware
 npm run format:check   # Prettier
 
 npm test               # Vitest unit/component suite (jsdom)
@@ -34,18 +34,32 @@ npx playwright test -g 'reroll'
 `npm run verify` is the gate — match it before pushing. CI
 (`.github/workflows/ci.yml`) runs the same steps in two jobs.
 
-### Toolchain constraints worth knowing
+### Toolchain: TypeScript 7 + oxlint
 
-- **TypeScript is pinned to 5.x on purpose.** `typescript-eslint` hard-errors on TS 7
-  (it is a runtime guard, not a peer warning), and TS 6 is still beta. Bumping
-  TypeScript past 5.x breaks `npm run lint` entirely.
-- **ESLint is pinned to 9.x** for the same reason — the plugin ecosystem
-  (`eslint-plugin-jsx-a11y` in particular) does not accept ESLint 10 yet.
-- Both pins are why `npm install` resolves cleanly with no `--legacy-peer-deps`.
-  Keep it that way; CI runs `npm ci`.
-- `tsconfig.app.json` covers `src` (including tests); `tsconfig.node.json` covers the
-  config files and `e2e`. A new top-level file needs to land in one of them or
-  type-aware linting fails with "not found by the project service".
+The linter is **oxlint**, not ESLint, and that is what lets this project run
+**TypeScript 7** (the native Go compiler).
+
+`typescript-eslint` refuses to load on TS 7 — a hard runtime guard, not a peer
+warning — because type-aware rules need TypeScript's _JavaScript_ API, which the
+native port does not expose. `typescript` is a **peer** dependency there, so npm
+hoists a single copy and no `overrides` trick can give the linter its own TS 6.
+oxlint sidesteps this: it is Rust, and its type-aware mode shells out to
+`oxlint-tsgolint`, which is built on the native compiler and versioned against it
+(`oxlint-tsgolint@7.0.x` tracks `typescript@7.0.x`).
+
+Consequences worth knowing:
+
+- **`npm run lint` must keep `--type-aware`.** Without it the rules that matter most
+  here — `no-floating-promises`, `no-misused-promises`, `no-misused-spread`,
+  `await-thenable` — silently do not run.
+- Keep `oxlint-tsgolint` roughly in step with `typescript`; a large drift between the
+  two is what breaks type-aware mode.
+- oxlint has no ESLint-style "project service", so unlike typescript-eslint a new
+  top-level file does not need to be added to a tsconfig just to be linted. It does
+  still need to be in `tsconfig.app.json` (covers `src`, tests included) or
+  `tsconfig.node.json` (covers the config files and `e2e`) to be **type-checked**.
+- Rule config lives in `.oxlintrc.json`. Prefer a scoped `overrides` entry with a
+  comment over switching a rule off globally.
 
 ### Testing approach
 
@@ -60,6 +74,9 @@ npx playwright test -g 'reroll'
   the same reason.
 - Coverage thresholds are ratcheted just under what the suite achieves, so a
   regression fails CI rather than sliding quietly. Raise them when coverage rises.
+- `errorMessage()` in `src/lib/errors.ts` is the only sanctioned way to turn a caught
+  `unknown` into user-facing text. `(err as Error).message` renders "undefined" when
+  something other than an Error is thrown.
 
 ## The constraint that shapes everything
 

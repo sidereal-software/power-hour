@@ -1,0 +1,121 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "typescript",
+    "react",
+    "react-perf",
+    "jsx-a11y",
+    "unicorn",
+    "promise",
+    "oxc",
+    "import",
+    "vitest"
+  ],
+  "env": {
+    "browser": true,
+    "es2024": true
+  },
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "error",
+    "pedantic": "off",
+    "style": "off"
+  },
+  "rules": {
+    "typescript/no-explicit-any": "error",
+    "typescript/consistent-type-imports": [
+      "error",
+      {
+        "prefer": "type-imports"
+      }
+    ],
+    "eslint/no-console": [
+      "error",
+      {
+        "allow": ["warn", "error"]
+      }
+    ],
+    "unicorn/prefer-node-protocol": "error",
+    "promise/no-return-wrap": "error",
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/await-thenable": "error",
+    "typescript/no-unnecessary-type-assertion": "error",
+    "typescript/no-unsafe-argument": "error",
+    "typescript/no-unsafe-assignment": "error",
+    "typescript/no-unsafe-call": "error",
+    "typescript/no-unsafe-member-access": "error",
+    "typescript/no-unsafe-return": "error",
+    "typescript/require-await": "error",
+    "react-perf/jsx-no-new-object-as-prop": "off",
+    "react-perf/jsx-no-new-array-as-prop": "off",
+    "react-perf/jsx-no-new-function-as-prop": "off",
+    "eslint/no-underscore-dangle": [
+      "error",
+      {
+        "allow": ["__phPlayerEvents", "__phPlayer", "__sdkReady"]
+      }
+    ],
+    "react/react-in-jsx-scope": "off",
+    "import/no-unassigned-import": "off",
+    "eslint/no-await-in-loop": "off"
+  },
+  "ignorePatterns": ["dist", "coverage", "playwright-report", "test-results", "node_modules"],
+  "overrides": [
+    {
+      "files": ["src/lib/playback.ts"],
+      "rules": {
+        "promise/no-callback-in-promise": "off"
+      }
+    },
+    {
+      "files": ["src/components/ui/**/*.tsx"],
+      "rules": {
+        "typescript/no-unnecessary-type-assertion": "off",
+        "eslint/no-unused-vars": "off",
+        "eslint/no-underscore-dangle": "off",
+        "typescript/no-unsafe-type-assertion": "off"
+      }
+    },
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx", "e2e/**/*.ts", "src/test/**/*.ts"],
+      "env": {
+        "node": true
+      },
+      "rules": {
+        "typescript/no-explicit-any": "off",
+        "typescript/no-unsafe-argument": "off",
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-call": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-unsafe-return": "off",
+        "typescript/unbound-method": "off",
+        "typescript/no-non-null-assertion": "off",
+        "vitest/require-mock-type-parameters": "off",
+        "eslint/no-await-in-loop": "off",
+        "unicorn/consistent-function-scoping": "off",
+        "eslint/no-underscore-dangle": "off",
+        "typescript/no-unsafe-type-assertion": "off"
+      }
+    },
+    {
+      "files": ["*.config.ts", "vite.config.ts", "vitest.config.ts", "playwright.config.ts"],
+      "env": {
+        "node": true
+      }
+    },
+    {
+      "files": ["src/hooks/use-local-storage.ts", "src/components/settings-panel.tsx"],
+      "rules": {
+        "typescript/no-unsafe-type-assertion": "off"
+      }
+    },
+    {
+      "files": ["src/lib/api.ts", "src/lib/auth.ts"],
+      "rules": {
+        "typescript/no-unsafe-type-assertion": "off"
+      }
+    }
+  ]
+}

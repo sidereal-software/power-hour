@@ -51,7 +51,7 @@ describe('playChime', () => {
   it('rises in pitch for the arcade voice', () => {
     playChime('arcade')
     const freqs = audioLog.oscillators.map((o) => o.frequency.value)
-    expect(freqs).toEqual([...freqs].sort((a, b) => a - b))
+    expect(freqs).toEqual(freqs.toSorted((a, b) => a - b))
   })
 
   it('falls back to the bell for an unknown voice', () => {

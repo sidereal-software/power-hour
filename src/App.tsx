@@ -13,6 +13,7 @@ import { useLocalStorage } from '@/hooks/use-local-storage'
 import * as api from '@/lib/api'
 import * as auth from '@/lib/auth'
 import { clearClientId, getClientId, setClientId } from '@/lib/config'
+import { errorMessage } from '@/lib/errors'
 import { artOf } from '@/lib/format'
 import * as playback from '@/lib/playback'
 import { DEFAULT_SETTINGS, SETTINGS_KEY, type GameSettings } from '@/lib/settings'
@@ -78,7 +79,7 @@ export default function App() {
         })),
       ])
     } catch (err) {
-      setPickerError((err as Error).message)
+      setPickerError(errorMessage(err))
     } finally {
       setPlaylistsLoading(false)
     }
@@ -105,7 +106,7 @@ export default function App() {
         }
       } catch (err) {
         if (cancelled) return
-        setAuthError((err as Error).message)
+        setAuthError(errorMessage(err))
         setPhase('setup')
         return
       }
@@ -143,7 +144,7 @@ export default function App() {
     try {
       await auth.login()
     } catch (err) {
-      setAuthError((err as Error).message)
+      setAuthError(errorMessage(err))
     }
   }
 

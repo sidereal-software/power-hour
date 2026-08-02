@@ -1,14 +1,8 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
-import { webcrypto } from 'node:crypto'
 import { afterEach, beforeEach, vi } from 'vitest'
 
 /* ── Browser APIs jsdom doesn't implement ──────────────────────────── */
-
-// auth.ts needs SubtleCrypto for the PKCE S256 challenge.
-if (!globalThis.crypto?.subtle) {
-  Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true })
-}
 
 // Radix primitives probe these during layout.
 globalThis.ResizeObserver ??= class {

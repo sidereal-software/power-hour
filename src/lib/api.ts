@@ -15,7 +15,20 @@ export class ApiError extends Error {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-async function request<T>(path: string, options: RequestInit = {}, allowRetry = true): Promise<T> {
+/**
+ * `RequestInit['headers']` also allows `Headers` and `string[][]`, and spreading
+ * either into an object literal yields index keys rather than header names.
+ * Every call site here passes a plain record, so require that.
+ */
+interface RequestOptions extends Omit<RequestInit, 'headers'> {
+  headers?: Record<string, string>
+}
+
+async function request<T>(
+  path: string,
+  options: RequestOptions = {},
+  allowRetry = true,
+): Promise<T> {
   const token = await getAccessToken()
   const res = await fetch(BASE + path, {
     ...options,
@@ -135,9 +148,9 @@ export function pause(deviceId: string) {
   })
 }
 
-export function transferPlayback(deviceId: string, play = false) {
+export function transferPlayback(deviceId: string, startPlaying = false) {
   return request<null>('/me/player', {
     method: 'PUT',
-    body: JSON.stringify({ device_ids: [deviceId], play }),
+    body: JSON.stringify({ device_ids: [deviceId], play: startPlaying }),
   })
 }

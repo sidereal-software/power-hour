@@ -58,7 +58,8 @@ export function GameScreen({
   React.useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.code !== 'Space') return
-      const tag = (document.activeElement as HTMLElement | null)?.tagName
+      const active = document.activeElement
+      const tag = active instanceof HTMLElement ? active.tagName : undefined
       if (tag && ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(tag)) return
       event.preventDefault()
       onTogglePause()

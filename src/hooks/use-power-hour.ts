@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import * as api from '@/lib/api'
 import * as playback from '@/lib/playback'
 import { unlockAudio } from '@/lib/chime'
+import { errorMessage } from '@/lib/errors'
 import {
   createGame,
   playableTracks,
@@ -109,7 +110,7 @@ export function usePowerHour({ onFinish }: { onFinish: () => void }) {
         await gameRef.current.start()
         return true
       } catch (err) {
-        patch({ loading: null, error: (err as Error).message })
+        patch({ loading: null, error: errorMessage(err) })
         return false
       }
     },

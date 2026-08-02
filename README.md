@@ -7,8 +7,8 @@ Pick one of your Spotify playlists and the app shuffles it, drops into each song
 random point, plays exactly one minute, rings a chime, and moves on. Do that sixty times
 and you have passed the power hour.
 
-Built with **React 19**, **Vite**, **Tailwind v4**, and **shadcn/ui**. 265 tests
-(Vitest + Playwright), type-aware ESLint, and CI on every push.
+Built with **React 19**, **TypeScript 7**, **Vite**, **Tailwind v4**, and **shadcn/ui**.
+276 tests (Vitest + Playwright), type-aware linting via **oxlint**, and CI on every push.
 
 ---
 
@@ -108,7 +108,7 @@ a real hour to see the victory screen.
 
 | Layer            | Tool                             | What it covers                                                                    |
 | ---------------- | -------------------------------- | --------------------------------------------------------------------------------- |
-| Unit + component | Vitest + Testing Library (jsdom) | 240 tests: the engine, PKCE auth, the API client, chimes, hooks, and every screen |
+| Unit + component | Vitest + Testing Library (jsdom) | 251 tests: the engine, PKCE auth, the API client, chimes, hooks, and every screen |
 | End-to-end       | Playwright (Chromium)            | 25 tests driving the real production bundle against a stubbed Spotify             |
 
 Run a single file or a single case:
@@ -130,12 +130,22 @@ Coverage thresholds are ratcheted just under what the suite achieves (96% statem
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs type-check, lint, format
 check, unit tests with coverage, and the Playwright suite on every push and pull request.
 
-### Toolchain pins
+### Why oxlint instead of ESLint
 
-TypeScript is held at **5.x** and ESLint at **9.x** on purpose: `typescript-eslint`
-hard-errors on TypeScript 7 and `eslint-plugin-jsx-a11y` does not accept ESLint 10 yet.
-Those pins are what let `npm install` resolve with no `--legacy-peer-deps`, which matters
-because CI runs `npm ci`. Bumping either one past its pin breaks `npm run lint`.
+Type-aware lint rules need a type checker. `typescript-eslint` gets one from TypeScript's
+_JavaScript_ API — which **TypeScript 7, the native Go compiler, does not expose**. It
+refuses to load on TS 7 with a hard runtime guard, and because `typescript` is a _peer_
+dependency there, npm hoists a single copy and no `overrides` trick can hand the linter its
+own TypeScript 6.
+
+[oxlint](https://oxc.rs) is written in Rust, and its `--type-aware` mode drives
+`oxlint-tsgolint`, which is built on the native compiler and versioned against it. So the
+project gets TypeScript 7 _and_ keeps the rules that matter — `no-floating-promises`,
+`no-misused-promises`, `no-misused-spread`, `await-thenable`. It is also considerably
+faster.
+
+`npm run lint` must keep the `--type-aware` flag; without it those rules silently do not
+run. Rule configuration lives in [`.oxlintrc.json`](.oxlintrc.json).
 
 ---
 
@@ -205,6 +215,7 @@ src/
     playback.ts              Web Playback SDK wrapper
     chime.ts                 synthesised chimes (Web Audio, no assets)
     engine.ts                queue building, random start points, the round clock
+    errors.ts                safe `unknown` → message narrowing for caught errors
     format.ts, settings.ts, spotify-types.ts
   **/*.test.ts(x)            unit + component tests, colocated
 e2e/
