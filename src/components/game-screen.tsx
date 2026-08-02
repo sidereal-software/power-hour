@@ -1,5 +1,14 @@
 import * as React from 'react'
-import { Dices, LogOut, Pause, Play, SkipForward, TriangleAlert, Volume1, Volume2 } from 'lucide-react'
+import {
+  Dices,
+  LogOut,
+  Pause,
+  Play,
+  SkipForward,
+  TriangleAlert,
+  Volume1,
+  Volume2,
+} from 'lucide-react'
 
 import { CountdownRing } from '@/components/countdown-ring'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'

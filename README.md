@@ -7,18 +7,19 @@ Pick one of your Spotify playlists and the app shuffles it, drops into each song
 random point, plays exactly one minute, rings a chime, and moves on. Do that sixty times
 and you have passed the power hour.
 
-Built with **React 19**, **Vite**, **Tailwind v4**, and **shadcn/ui**.
+Built with **React 19**, **Vite**, **Tailwind v4**, and **shadcn/ui**. 265 tests
+(Vitest + Playwright), type-aware ESLint, and CI on every push.
 
 ---
 
 ## Why this works without a server
 
-| Need | Browser-only solution |
-| --- | --- |
+| Need                                              | Browser-only solution                                                                    |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | Log in to Spotify without leaking a client secret | **Authorization Code + PKCE** — designed for public clients; no secret exists to protect |
-| Play full tracks from a static page | **Web Playback SDK** — turns the tab into a real Spotify Connect device |
-| Start a song mid-way through | `PUT /v1/me/player/play` with `position_ms` |
-| Chime between songs | Web Audio API oscillators — synthesised, so there are no audio files to host |
+| Play full tracks from a static page               | **Web Playback SDK** — turns the tab into a real Spotify Connect device                  |
+| Start a song mid-way through                      | `PUT /v1/me/player/play` with `position_ms`                                              |
+| Chime between songs                               | Web Audio API oscillators — synthesised, so there are no audio files to host             |
 
 The Client ID is a public identifier. Nothing secret is ever shipped, and no request
 touches a server other than Spotify's own API.
@@ -30,7 +31,7 @@ touches a server other than Spotify's own API.
   projects used is no longer populated for new apps.)
 - **A desktop browser** — Chrome, Edge, Firefox, or Safari. The SDK does not support mobile
   browsers, so phones and tablets can't be the playback device. The app detects this and warns.
-- The tab must stay open; it *is* the speaker. The app takes a screen wake lock where supported.
+- The tab must stay open; it _is_ the speaker. The app takes a screen wake lock where supported.
 
 ---
 
@@ -88,12 +89,53 @@ that address rather than `localhost`. Spotify requires HTTPS for every redirect 
 Turn the round length down to 5 seconds in **Settings** when testing so you aren't waiting
 a real hour to see the victory screen.
 
-| Script | Does |
-| --- | --- |
-| `npm run dev` | Vite dev server with HMR |
-| `npm run build` | Type-check (`tsc -b`) then build to `dist/` |
-| `npm run preview` | Serve the production build locally |
-| `npm run typecheck` | Types only, no build |
+| Script                  | Does                                        |
+| ----------------------- | ------------------------------------------- |
+| `npm run dev`           | Vite dev server with HMR                    |
+| `npm run build`         | Type-check (`tsc -b`) then build to `dist/` |
+| `npm run preview`       | Serve the production build locally          |
+| `npm run typecheck`     | Types only, no build                        |
+| `npm run lint`          | ESLint, type-aware                          |
+| `npm run format`        | Prettier, write                             |
+| `npm test`              | Vitest unit + component suite               |
+| `npm run test:coverage` | Vitest with v8 coverage and thresholds      |
+| `npm run test:e2e`      | Playwright against the production build     |
+| `npm run verify`        | Everything CI runs, in order                |
+
+---
+
+## Testing
+
+| Layer            | Tool                             | What it covers                                                                    |
+| ---------------- | -------------------------------- | --------------------------------------------------------------------------------- |
+| Unit + component | Vitest + Testing Library (jsdom) | 240 tests: the engine, PKCE auth, the API client, chimes, hooks, and every screen |
+| End-to-end       | Playwright (Chromium)            | 25 tests driving the real production bundle against a stubbed Spotify             |
+
+Run a single file or a single case:
+
+```bash
+npx vitest run src/lib/engine.test.ts
+npx vitest run -t 'never places the same track back to back'
+npx playwright test -g 'reroll'
+```
+
+The e2e fixture ([`e2e/fixtures/spotify.ts`](e2e/fixtures/spotify.ts)) stubs **only** the
+Web Playback SDK script and `api.spotify.com`. Everything below that line — token storage,
+the round clock, the UI — is the real application. A full run is exercised end to end on
+the clock, not by clicking _Skip_, so the timing logic is genuinely covered.
+
+Coverage thresholds are ratcheted just under what the suite achieves (96% statements,
+98% lines), so a regression fails CI instead of sliding quietly.
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs type-check, lint, format
+check, unit tests with coverage, and the Playwright suite on every push and pull request.
+
+### Toolchain pins
+
+TypeScript is held at **5.x** and ESLint at **9.x** on purpose: `typescript-eslint`
+hard-errors on TypeScript 7 and `eslint-plugin-jsx-a11y` does not accept ESLint 10 yet.
+Those pins are what let `npm install` resolve with no `--legacy-peer-deps`, which matters
+because CI runs `npm ci`. Bumping either one past its pin breaks `npm run lint`.
 
 ---
 
@@ -115,17 +157,17 @@ pick track ──▶ random position_ms ──▶ PUT /me/player/play ──▶ 
 - **Short playlists** are handled by reshuffling whole passes, so every song plays once
   before any song repeats, and never twice in a row across the seam.
 - **Reroll** guarantees a different, preferably not-yet-played track.
-- **A generation counter** drops stale `play()` responses, so mashing *Skip* can't let an
+- **A generation counter** drops stale `play()` responses, so mashing _Skip_ can't let an
   older round's request win the race and resurrect a dead round.
 
 ### Controls
 
-| Control | Effect |
-| --- | --- |
-| **Pause** / `Space` | Stops the music and the clock together |
-| **Reroll song** | Swaps in a different track and restarts the current minute |
-| **Skip minute** | Counts the round as done and advances |
-| **Quit** | Stops playback, back to the playlist list |
+| Control             | Effect                                                     |
+| ------------------- | ---------------------------------------------------------- |
+| **Pause** / `Space` | Stops the music and the clock together                     |
+| **Reroll song**     | Swaps in a different track and restarts the current minute |
+| **Skip minute**     | Counts the round as done and advances                      |
+| **Quit**            | Stops playback, back to the playlist list                  |
 
 ### Settings
 
@@ -155,6 +197,7 @@ src/
   hooks/
     use-power-hour.ts        wraps the engine, exposes React state
     use-local-storage.ts
+  test/                      Vitest setup + data factories
   lib/
     config.ts                client ID + scopes + redirect URI normalisation
     auth.ts                  PKCE flow, token storage, silent refresh
@@ -163,6 +206,11 @@ src/
     chime.ts                 synthesised chimes (Web Audio, no assets)
     engine.ts                queue building, random start points, the round clock
     format.ts, settings.ts, spotify-types.ts
+  **/*.test.ts(x)            unit + component tests, colocated
+e2e/
+  fixtures/spotify.ts        Web Playback SDK + Web API stub
+  auth.spec.ts               setup, PKCE authorize request, session
+  power-hour.spec.ts         picker, a full run, controls, failure handling
 ```
 
 `src/lib/engine.ts` is deliberately framework-free — React only subscribes to its
@@ -184,13 +232,13 @@ One deviation from upstream: `ui/sonner.tsx` pins `theme="dark"` instead of read
 
 ## Troubleshooting
 
-| Symptom | Cause |
-| --- | --- |
-| `INVALID_CLIENT: Invalid redirect URI` | The dashboard URI doesn't match byte-for-byte. Check the trailing slash. The setup screen prints the exact string to paste. |
-| Auth succeeds, playback doesn't start | Account isn't Premium, or another device grabbed playback — press Resume. |
-| `Timed out waiting for the Spotify player` | Browser blocked the DRM/EME module. Firefox needs DRM playback enabled in Settings. |
-| Nothing happens for a friend | They're not in the app's User Management list (Development Mode's 25-user cap). |
-| Blank page after deploy | Pages source is still "Deploy from a branch" — switch it to "GitHub Actions". |
+| Symptom                                    | Cause                                                                                                                       |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `INVALID_CLIENT: Invalid redirect URI`     | The dashboard URI doesn't match byte-for-byte. Check the trailing slash. The setup screen prints the exact string to paste. |
+| Auth succeeds, playback doesn't start      | Account isn't Premium, or another device grabbed playback — press Resume.                                                   |
+| `Timed out waiting for the Spotify player` | Browser blocked the DRM/EME module. Firefox needs DRM playback enabled in Settings.                                         |
+| Nothing happens for a friend               | They're not in the app's User Management list (Development Mode's 25-user cap).                                             |
+| Blank page after deploy                    | Pages source is still "Deploy from a branch" — switch it to "GitHub Actions".                                               |
 
 ## Notes
 

@@ -202,7 +202,9 @@ export function createGame({
           )
         }
       } else if (status === 403) {
-        return on.error?.('Spotify refused playback. This usually means the account is not Premium.')
+        return on.error?.(
+          'Spotify refused playback. This usually means the account is not Premium.',
+        )
       } else {
         return on.error?.(`Could not start the track: ${(err as Error).message}`)
       }

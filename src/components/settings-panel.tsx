@@ -36,12 +36,11 @@ export function SettingsPanel({ settings, onChange }: SettingsPanelProps) {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <Label htmlFor="round-length">Round length</Label>
-            <span className="text-muted-foreground tabular text-sm">
-              {settings.roundSeconds}s
-            </span>
+            <span className="text-muted-foreground tabular text-sm">{settings.roundSeconds}s</span>
           </div>
           <Slider
             id="round-length"
+            aria-label="Round length"
             min={5}
             max={120}
             step={5}
@@ -57,6 +56,7 @@ export function SettingsPanel({ settings, onChange }: SettingsPanelProps) {
           </div>
           <Slider
             id="round-count"
+            aria-label="Number of rounds"
             min={5}
             max={100}
             step={1}
@@ -68,10 +68,7 @@ export function SettingsPanel({ settings, onChange }: SettingsPanelProps) {
         <div className="flex items-center justify-between gap-3">
           <Label htmlFor="chime">Chime</Label>
           <div className="flex items-center gap-2">
-            <Select
-              value={settings.chime}
-              onValueChange={(v) => set('chime', v as ChimeName)}
-            >
+            <Select value={settings.chime} onValueChange={(v) => set('chime', v as ChimeName)}>
               <SelectTrigger id="chime" size="sm" className="w-32">
                 <SelectValue />
               </SelectTrigger>
@@ -115,7 +112,8 @@ export function SettingsPanel({ settings, onChange }: SettingsPanelProps) {
         </div>
 
         <p className="text-muted-foreground border-t pt-4 text-sm">
-          Total run time: <span className="text-foreground tabular font-medium">{clock(totalMs)}</span>
+          Total run time:{' '}
+          <span className="text-foreground tabular font-medium">{clock(totalMs)}</span>
         </p>
       </CardContent>
     </Card>

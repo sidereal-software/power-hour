@@ -55,10 +55,29 @@ export interface PlaylistChoice {
 
 /* ── Web Playback SDK ──────────────────────────────────────────────── */
 
+export interface WebPlaybackError {
+  message: string
+}
+
+export interface WebPlaybackDevice {
+  device_id: string
+}
+
+/**
+ * Overloaded so each event's payload is typed at the call site — the SDK ships
+ * no types of its own, and a single `(payload: never)` signature just pushes
+ * casts into every listener.
+ */
 export interface WebPlaybackPlayer {
   connect(): Promise<boolean>
   disconnect(): void
-  addListener(event: string, cb: (payload: never) => void): boolean
+  addListener(event: 'ready' | 'not_ready', cb: (payload: WebPlaybackDevice) => void): boolean
+  addListener(
+    event: 'initialization_error' | 'authentication_error' | 'account_error' | 'playback_error',
+    cb: (payload: WebPlaybackError) => void,
+  ): boolean
+  addListener(event: 'autoplay_failed', cb: () => void): boolean
+  addListener(event: 'player_state_changed', cb: (state: unknown) => void): boolean
   resume(): Promise<void>
   pause(): Promise<void>
   setVolume(value: number): Promise<void>

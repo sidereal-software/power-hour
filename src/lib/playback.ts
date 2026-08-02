@@ -26,12 +26,17 @@ interface ConnectOptions {
  * playback on one, and the SDK opens its audio context on connect.
  * Resolves once Spotify hands us a device_id.
  */
-export async function connectPlayer({ onError, volume = 0.8 }: ConnectOptions = {}): Promise<string> {
+export async function connectPlayer({
+  onError,
+  volume = 0.8,
+}: ConnectOptions = {}): Promise<string> {
   if (player && deviceId) return deviceId
 
   await window.__sdkReady
 
-  player = new window.Spotify.Player({
+  // Bind to a local const: the module-level `player` is mutable, so TypeScript
+  // discards its narrowing across the closures created below.
+  const instance = new window.Spotify.Player({
     name: 'Power Hour',
     volume,
     getOAuthToken: (cb) => {
@@ -46,34 +51,37 @@ export async function connectPlayer({ onError, volume = 0.8 }: ConnectOptions = 
     },
   })
 
-  const fail = (message: string) => onError?.(message)
-  const listen = (event: string, handler: (payload: { message: string }) => void) =>
-    player!.addListener(event, handler as (payload: never) => void)
+  player = instance
 
-  listen('initialization_error', ({ message }) =>
-    fail(`Playback could not start in this browser. ${message}`))
-  listen('authentication_error', ({ message }) => fail(`Spotify rejected the session. ${message}`))
-  listen('account_error', () => fail('Spotify Premium is required for in-browser playback.'))
-  listen('playback_error', ({ message }) => fail(`Playback error: ${message}`))
-  listen('autoplay_failed', () =>
-    fail('The browser blocked autoplay. Press play again to continue.'))
+  const fail = (message: string) => onError?.(message)
+
+  instance.addListener('initialization_error', ({ message }) =>
+    fail(`Playback could not start in this browser. ${message}`),
+  )
+  instance.addListener('authentication_error', ({ message }) =>
+    fail(`Spotify rejected the session. ${message}`),
+  )
+  instance.addListener('account_error', () =>
+    fail('Spotify Premium is required for in-browser playback.'),
+  )
+  instance.addListener('playback_error', ({ message }) => fail(`Playback error: ${message}`))
+  instance.addListener('autoplay_failed', () =>
+    fail('The browser blocked autoplay. Press play again to continue.'),
+  )
 
   const ready = new Promise<string>((resolve, reject) => {
-    player!.addListener('ready', ((payload: { device_id: string }) => {
-      deviceId = payload.device_id
-      resolve(payload.device_id)
-    }) as (payload: never) => void)
-    setTimeout(
-      () => reject(new Error('Timed out waiting for the Spotify player to start.')),
-      20000,
-    )
+    instance.addListener('ready', ({ device_id }) => {
+      deviceId = device_id
+      resolve(device_id)
+    })
+    setTimeout(() => reject(new Error('Timed out waiting for the Spotify player to start.')), 20000)
   })
 
-  player.addListener('not_ready', (() => {
+  instance.addListener('not_ready', () => {
     deviceId = null
-  }) as (payload: never) => void)
+  })
 
-  const connected = await player.connect()
+  const connected = await instance.connect()
   if (!connected) throw new Error('Could not connect to Spotify playback.')
 
   return ready

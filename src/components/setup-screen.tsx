@@ -102,7 +102,12 @@ export function SetupScreen({
                 <code className="bg-input/40 text-primary min-w-0 flex-1 truncate rounded-md border px-3 py-2 text-xs">
                   {uri}
                 </code>
-                <Button variant="outline" size="icon" onClick={copy} aria-label="Copy redirect URI">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => void copy()}
+                  aria-label="Copy redirect URI"
+                >
                   {copied ? <Check className="text-primary" /> : <Copy />}
                 </Button>
               </div>

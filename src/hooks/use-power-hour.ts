@@ -4,7 +4,14 @@ import { toast } from 'sonner'
 import * as api from '@/lib/api'
 import * as playback from '@/lib/playback'
 import { unlockAudio } from '@/lib/chime'
-import { createGame, playableTracks, type Game, type GameStatus, type RoundInfo, type TickInfo } from '@/lib/engine'
+import {
+  createGame,
+  playableTracks,
+  type Game,
+  type GameStatus,
+  type RoundInfo,
+  type TickInfo,
+} from '@/lib/engine'
 import type { GameSettings } from '@/lib/settings'
 import type { PlaylistChoice } from '@/lib/spotify-types'
 
@@ -37,9 +44,13 @@ export function usePowerHour({ onFinish }: { onFinish: () => void }) {
   const [state, setState] = React.useState<PowerHourState>(INITIAL)
   const gameRef = React.useRef<Game | null>(null)
   // Callbacks are handed to the imperative engine once; a ref keeps the latest
-  // onFinish reachable without tearing down and rebuilding the game.
+  // onFinish reachable without tearing down and rebuilding the game. Assigned in
+  // an effect rather than during render — a render-phase write is not safe under
+  // concurrent rendering, which React can discard and replay.
   const finishRef = React.useRef(onFinish)
-  finishRef.current = onFinish
+  React.useEffect(() => {
+    finishRef.current = onFinish
+  }, [onFinish])
 
   const patch = React.useCallback(
     (next: Partial<PowerHourState>) => setState((prev) => ({ ...prev, ...next })),

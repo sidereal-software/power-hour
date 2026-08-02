@@ -58,14 +58,28 @@ export const CHIMES = {
   airhorn: (now: number) => {
     ;[233, 293, 349].forEach((freq, i) => {
       tone({ type: 'sawtooth', freq, peak: 0.16, start: now + i * 0.004, attack: 0.03, decay: 0.9 })
-      tone({ type: 'sawtooth', freq: freq * 1.01, peak: 0.12, start: now, attack: 0.04, decay: 0.9 })
+      tone({
+        type: 'sawtooth',
+        freq: freq * 1.01,
+        peak: 0.12,
+        start: now,
+        attack: 0.04,
+        decay: 0.9,
+      })
     })
   },
 
   /** Rising square arpeggio — coin-collect energy. */
   arcade: (now: number) => {
     ;[523, 659, 784, 1047].forEach((freq, i) =>
-      tone({ type: 'square', freq, peak: 0.18, start: now + i * 0.075, attack: 0.005, decay: 0.16 }),
+      tone({
+        type: 'square',
+        freq,
+        peak: 0.18,
+        start: now + i * 0.075,
+        attack: 0.005,
+        decay: 0.16,
+      }),
     )
   },
 

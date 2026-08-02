@@ -188,7 +188,7 @@ export default function App() {
               error={authError}
               onSaveClientId={handleSaveClientId}
               onChangeClientId={handleChangeClientId}
-              onConnect={handleConnect}
+              onConnect={() => void handleConnect()}
             />
           )}
 
@@ -200,7 +200,7 @@ export default function App() {
               error={pickerError}
               settings={settings}
               onSettingsChange={setSettings}
-              onPick={handlePick}
+              onPick={(choice) => void handlePick(choice)}
               onSignOut={handleSignOut}
             />
           )}
