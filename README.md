@@ -1,17 +1,17 @@
 # Power Hour
 
 60 songs. 60 random timestamps. 60 minutes. A Spotify-powered power hour that runs
-entirely in the browser — **no backend, no server, no database.** Host it on GitHub Pages.
+entirely in the browser — **no backend, no server, no database.** Hosted on GitHub Pages.
 
 Pick one of your Spotify playlists and the app shuffles it, drops into each song at a
 random point, plays exactly one minute, rings a chime, and moves on. Do that sixty times
 and you have passed the power hour.
 
+Built with **React 19**, **Vite**, **Tailwind v4**, and **shadcn/ui**.
+
 ---
 
 ## Why this works without a server
-
-Two pieces make it possible:
 
 | Need | Browser-only solution |
 | --- | --- |
@@ -49,22 +49,19 @@ touches a server other than Spotify's own API.
 4. Under **APIs used**, tick **Web API** and **Web Playback SDK**.
 5. Save, then copy the **Client ID**.
 
-### 2. Wire up the Client ID
+### 2. Turn on GitHub Pages
 
-Either hard-code it in [`js/config.js`](js/config.js):
+**Settings → Pages → Source: GitHub Actions.**
 
-```js
-export const CLIENT_ID = 'your_client_id_here';
-```
+Pushing to `main` then runs [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml),
+which builds with Vite and publishes `dist/`.
 
-…or leave it empty and paste it into the one-time setup form the site shows on first load
-(it's kept in `localStorage`). Hard-coding is nicer if you're sharing the link.
+### 3. Wire up the Client ID
 
-### 3. Turn on GitHub Pages
-
-**Settings → Pages → Source: Deploy from a branch → `main` / `(root)`.**
-
-Give it a minute, then open the URL. That's the whole deployment.
+Either set a repository variable — **Settings → Secrets and variables → Actions →
+Variables** → `VITE_SPOTIFY_CLIENT_ID` — and the workflow bakes it into the build, or skip
+it entirely and the site shows a one-time form asking visitors for their own (kept in
+`localStorage`). The repository variable is nicer if you're sharing the link.
 
 ### 4. Add your friends (important)
 
@@ -79,19 +76,24 @@ audio comes out of one machine anyway, so usually only the host needs to log in.
 
 ## Local development
 
-No build step, no dependencies. Serve the folder over HTTP:
-
 ```bash
-python3 -m http.server 8080 --bind 127.0.0.1
-# then open http://127.0.0.1:8080/
+npm install
+npm run dev     # http://localhost:5173/
 ```
 
-Add `http://127.0.0.1:8080/` as a second Redirect URI in the dashboard. Spotify requires
-HTTPS for every redirect URI **except** loopback, and it must be the literal IP —
-`http://localhost:8080/` is rejected.
+Add `http://127.0.0.1:5173/` as a second Redirect URI in the dashboard, and open the app at
+that address rather than `localhost`. Spotify requires HTTPS for every redirect URI
+**except** loopback, and it must be the literal IP — `http://localhost:5173/` is rejected.
 
 Turn the round length down to 5 seconds in **Settings** when testing so you aren't waiting
 a real hour to see the victory screen.
+
+| Script | Does |
+| --- | --- |
+| `npm run dev` | Vite dev server with HMR |
+| `npm run build` | Type-check (`tsc -b`) then build to `dist/` |
+| `npm run preview` | Serve the production build locally |
+| `npm run typecheck` | Types only, no build |
 
 ---
 
@@ -111,7 +113,10 @@ pick track ──▶ random position_ms ──▶ PUT /me/player/play ──▶ 
   precisely the length of the game, so the app refreshes five minutes early rather than
   discovering the problem at minute 59.
 - **Short playlists** are handled by reshuffling whole passes, so every song plays once
-  before any song repeats.
+  before any song repeats, and never twice in a row across the seam.
+- **Reroll** guarantees a different, preferably not-yet-played track.
+- **A generation counter** drops stale `play()` responses, so mashing *Skip* can't let an
+  older round's request win the race and resurrect a dead round.
 
 ### Controls
 
@@ -125,23 +130,57 @@ pick track ──▶ random position_ms ──▶ PUT /me/player/play ──▶ 
 ### Settings
 
 Round length (5–120s), number of rounds (5–100), chime voice (bell / ding / air horn /
-arcade / silent), and whether short playlists may reuse tracks.
+arcade / silent), and whether short playlists may reuse tracks. Settings persist in
+`localStorage` between runs.
 
 ---
 
 ## Project layout
 
 ```
-index.html        screens: setup, playlist picker, game, victory
-styles.css        dark neon theme, blurred album-art backdrop
-js/config.js      client ID + scopes + redirect URI normalisation
-js/auth.js        PKCE flow, token storage, silent refresh
-js/api.js         Web API client: 401 refresh, 429 backoff, pagination
-js/player.js      Web Playback SDK wrapper
-js/chime.js       synthesised chimes (Web Audio, no assets)
-js/game.js        queue building, random start points, the round clock
-js/main.js        UI wiring
+index.html                   loads the Spotify SDK, mounts React
+src/
+  App.tsx                    phase machine: setup → picker → game → victory
+  main.tsx
+  index.css                  Tailwind v4 + shadcn tokens (Spotify green as --primary)
+  components/
+    ui/                      shadcn/ui components
+    setup-screen.tsx         Client ID + connect
+    playlist-picker.tsx      playlist list, filter, premium/mobile warnings
+    settings-panel.tsx       round length, count, chime, repeats
+    game-screen.tsx          now playing, controls, volume
+    victory-screen.tsx
+    countdown-ring.tsx       SVG progress ring
+    art-backdrop.tsx         blurred album-art wash
+  hooks/
+    use-power-hour.ts        wraps the engine, exposes React state
+    use-local-storage.ts
+  lib/
+    config.ts                client ID + scopes + redirect URI normalisation
+    auth.ts                  PKCE flow, token storage, silent refresh
+    api.ts                   Web API client: 401 refresh, 429 backoff, pagination
+    playback.ts              Web Playback SDK wrapper
+    chime.ts                 synthesised chimes (Web Audio, no assets)
+    engine.ts                queue building, random start points, the round clock
+    format.ts, settings.ts, spotify-types.ts
 ```
+
+`src/lib/engine.ts` is deliberately framework-free — React only subscribes to its
+callbacks, so the game logic stays testable on its own.
+
+### About the shadcn components
+
+They were vendored in the normal shadcn way (source lives in `src/components/ui/`, yours to
+edit). [`components.json`](components.json) is configured, so adding more works as usual:
+
+```bash
+npx shadcn@latest add dialog
+```
+
+One deviation from upstream: `ui/sonner.tsx` pins `theme="dark"` instead of reading
+`next-themes`, since this app is dark-only and doesn't need the extra dependency.
+
+---
 
 ## Troubleshooting
 
@@ -151,6 +190,7 @@ js/main.js        UI wiring
 | Auth succeeds, playback doesn't start | Account isn't Premium, or another device grabbed playback — press Resume. |
 | `Timed out waiting for the Spotify player` | Browser blocked the DRM/EME module. Firefox needs DRM playback enabled in Settings. |
 | Nothing happens for a friend | They're not in the app's User Management list (Development Mode's 25-user cap). |
+| Blank page after deploy | Pages source is still "Deploy from a branch" — switch it to "GitHub Actions". |
 
 ## Notes
 
