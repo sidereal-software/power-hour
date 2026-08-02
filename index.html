@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Power Hour</title>
+<meta name="description" content="60 songs. 60 random timestamps. 60 minutes. A Spotify power hour that runs entirely in your browser.">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍺</text></svg>">
+<script>
+  // Must exist before the SDK script runs; modules are deferred and would be too late.
+  window.__sdkReady = new Promise((resolve) => { window.onSpotifyWebPlaybackSDKReady = resolve; });
+</script>
+<script src="https://sdk.scdn.co/spotify-player.js"></script>
+<script type="module" src="js/main.js"></script>
+</head>
+<body>
+
+<div id="art-backdrop" aria-hidden="true"></div>
+
+<main id="app">
+
+  <!-- ── Setup ───────────────────────────────────────────────────────── -->
+  <section id="screen-setup" class="screen">
+    <header class="brand">
+      <h1>Power<span>Hour</span></h1>
+      <p class="tagline">60 songs · 60 random timestamps · 60 minutes</p>
+    </header>
+
+    <div class="card">
+      <div id="setup-clientid" class="hidden">
+        <h2>One-time setup</h2>
+        <p class="muted">
+          This site has no backend, so it needs your own Spotify app's Client ID.
+          Create one at
+          <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a>
+          and add this exact Redirect URI:
+        </p>
+        <code class="redirect-uri" id="redirect-uri-display"></code>
+        <label class="field">
+          <span>Client ID</span>
+          <input type="text" id="client-id-input" placeholder="e.g. 4f2a9c1b8e7d4a6f9c3b2e1d0a5f8c7b" autocomplete="off" spellcheck="false">
+        </label>
+        <button class="btn btn-primary" id="save-client-id">Save Client ID</button>
+      </div>
+
+      <div id="setup-connect">
+        <button class="btn btn-primary btn-big" id="login-btn">Connect Spotify</button>
+        <p class="muted small">
+          Requires <strong>Spotify Premium</strong> and a desktop browser (Chrome, Edge, Firefox, or Safari).
+          Playback happens in this tab.
+        </p>
+        <button class="linkish hidden" id="change-client-id">Use a different Client ID</button>
+      </div>
+
+      <p class="error hidden" id="setup-error"></p>
+    </div>
+
+    <details class="rules">
+      <summary>How it works</summary>
+      <ol>
+        <li>Pick a playlist. We shuffle it and draw 60 tracks.</li>
+        <li>Each track starts at a <em>random</em> point in the song.</li>
+        <li>After 60 seconds a chime rings and the next song takes over.</li>
+        <li>Survive all 60 rounds and you have passed the power hour.</li>
+      </ol>
+      <p class="muted small">Drink responsibly, or don't drink at all — the timer doesn't care what's in the glass.</p>
+    </details>
+  </section>
+
+  <!-- ── Playlist picker ─────────────────────────────────────────────── -->
+  <section id="screen-picker" class="screen hidden">
+    <header class="picker-head">
+      <div>
+        <h2>Choose your playlist</h2>
+        <p class="muted small" id="user-line"></p>
+      </div>
+      <button class="linkish" id="logout-btn">Log out</button>
+    </header>
+
+    <input type="search" id="playlist-filter" placeholder="Filter playlists…" autocomplete="off">
+
+    <div id="playlist-list" class="playlist-list" role="list">
+      <div class="loading">Loading your playlists…</div>
+    </div>
+
+    <details class="settings card">
+      <summary>Settings</summary>
+      <label class="field">
+        <span>Round length <output id="round-out">60s</output></span>
+        <input type="range" id="round-length" min="5" max="120" step="5" value="60">
+      </label>
+      <label class="field">
+        <span>Number of rounds <output id="rounds-out">60</output></span>
+        <input type="range" id="round-count" min="5" max="100" step="1" value="60">
+      </label>
+      <label class="field">
+        <span>Chime</span>
+        <select id="chime-select">
+          <option value="bell">Bell</option>
+          <option value="ding">Ding</option>
+          <option value="airhorn">Air horn</option>
+          <option value="arcade">Arcade</option>
+          <option value="none">Silent</option>
+        </select>
+        <button class="linkish" id="test-chime" type="button">Test</button>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="allow-repeats" checked>
+        <span>Reuse tracks if the playlist is shorter than the round count</span>
+      </label>
+      <p class="muted small" id="duration-note"></p>
+    </details>
+
+    <p class="error hidden" id="picker-error"></p>
+  </section>
+
+  <!-- ── Game ────────────────────────────────────────────────────────── -->
+  <section id="screen-game" class="screen hidden">
+    <div class="game-top">
+      <div class="round-counter">
+        <span class="round-now" id="round-now">1</span><span class="round-total" id="round-total">/ 60</span>
+      </div>
+      <div class="hour-progress">
+        <div class="hour-bar"><div class="hour-fill" id="hour-fill"></div></div>
+        <span class="muted small" id="hour-remaining"></span>
+      </div>
+    </div>
+
+    <div class="now-playing">
+      <img id="track-art" alt="" width="200" height="200">
+      <div class="track-meta">
+        <h2 id="track-name">Loading…</h2>
+        <p id="track-artist"></p>
+        <p class="muted small" id="track-position"></p>
+      </div>
+    </div>
+
+    <div class="timer" id="timer">
+      <svg viewBox="0 0 120 120" class="ring" aria-hidden="true">
+        <circle class="ring-track" cx="60" cy="60" r="54"></circle>
+        <circle class="ring-fill" id="ring-fill" cx="60" cy="60" r="54"></circle>
+      </svg>
+      <div class="timer-text"><span id="seconds-left">60</span></div>
+    </div>
+
+    <div class="controls">
+      <button class="btn" id="pause-btn">Pause</button>
+      <button class="btn" id="reroll-btn" title="Swap this song, keep the minute">Reroll song</button>
+      <button class="btn" id="skip-btn" title="Count this minute as done">Skip minute</button>
+      <button class="btn btn-quiet" id="quit-btn">Quit</button>
+    </div>
+
+    <label class="volume">
+      <span aria-hidden="true">🔈</span>
+      <input type="range" id="volume" min="0" max="100" value="80" aria-label="Volume">
+      <span aria-hidden="true">🔊</span>
+    </label>
+
+    <p class="error hidden" id="game-error"></p>
+    <p class="muted small" id="game-status"></p>
+  </section>
+
+  <!-- ── Victory ─────────────────────────────────────────────────────── -->
+  <section id="screen-victory" class="screen hidden">
+    <div class="victory">
+      <h1>You passed the Power Hour</h1>
+      <p class="victory-stats" id="victory-stats"></p>
+      <button class="btn btn-primary btn-big" id="again-btn">Go again</button>
+      <button class="linkish" id="home-btn">Back to playlists</button>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <span>Runs entirely in your browser · no server, no data collected</span>
+</footer>
+
+</body>
+</html>
