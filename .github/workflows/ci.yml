@@ -32,6 +32,8 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # oxfmt covers TS/TSX, CSS, HTML, JSON, YAML and Markdown — the same
+      # surface Prettier had here.
       - name: Check formatting
         run: npm run format:check
 

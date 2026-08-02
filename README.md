@@ -8,7 +8,8 @@ random point, plays exactly one minute, rings a chime, and moves on. Do that six
 and you have passed the power hour.
 
 Built with **React 19**, **TypeScript 7**, **Vite**, **Tailwind v4**, and **shadcn/ui**.
-276 tests (Vitest + Playwright), type-aware linting via **oxlint**, and CI on every push.
+276 tests (Vitest + Playwright), type-aware linting via **oxlint**, formatting via
+**oxfmt**, and CI on every push.
 
 ---
 
@@ -146,6 +147,12 @@ faster.
 
 `npm run lint` must keep the `--type-aware` flag; without it those rules silently do not
 run. Rule configuration lives in [`.oxlintrc.json`](.oxlintrc.json).
+
+Formatting comes from the same toolchain: **oxfmt** replaces Prettier and covers TS/TSX,
+CSS, HTML, JSON, YAML and Markdown. It was migrated with `oxfmt --migrate=prettier`, and
+because its output matched Prettier's byte for byte on all 74 files, the switch caused no
+reformatting churn. Config lives in [`.oxfmtrc.json`](.oxfmtrc.json); `npm run format:check`
+is the gate.
 
 ---
 

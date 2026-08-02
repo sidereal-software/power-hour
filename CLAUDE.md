@@ -12,7 +12,7 @@ npm run preview        # serve the production build
 
 npm run typecheck      # types only (TypeScript 7, native)
 npm run lint           # oxlint, type-aware
-npm run format:check   # Prettier
+npm run format:check   # oxfmt
 
 npm test               # Vitest unit/component suite (jsdom)
 npm run test:watch     # Vitest in watch mode
@@ -34,7 +34,7 @@ npx playwright test -g 'reroll'
 `npm run verify` is the gate — match it before pushing. CI
 (`.github/workflows/ci.yml`) runs the same steps in two jobs.
 
-### Toolchain: TypeScript 7 + oxlint
+### Toolchain: TypeScript 7 + oxlint + oxfmt
 
 The linter is **oxlint**, not ESLint, and that is what lets this project run
 **TypeScript 7** (the native Go compiler).
@@ -60,6 +60,11 @@ Consequences worth knowing:
   `tsconfig.node.json` (covers the config files and `e2e`) to be **type-checked**.
 - Rule config lives in `.oxlintrc.json`. Prefer a scoped `overrides` entry with a
   comment over switching a rule off globally.
+- Formatting is **oxfmt** (`.oxfmtrc.json`), not Prettier. It covers TS/TSX, CSS,
+  HTML, JSON, YAML and Markdown, and it was migrated from the old Prettier config
+  with `oxfmt --migrate=prettier` — the settings and the output are the same, so
+  the switch produced no reformatting churn. `oxfmt --check` is the CI gate.
+- oxfmt reads `.gitignore` for exclusions on top of `ignorePatterns`.
 
 ### Testing approach
 
