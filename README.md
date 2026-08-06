@@ -37,15 +37,18 @@ You only do this once.
 
 1. Open the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) → **Create app**.
 2. Name it anything.
-3. Under **Redirect URIs**, add your Pages URL — trailing slash included:
+3. Under **Redirect URIs**, add the address the site is actually served from — trailing
+   slash included:
 
-   ```
-   https://<owner>.github.io/<repo>/
-   ```
+   | Hosted at               | Redirect URI                       |
+   | ----------------------- | ---------------------------------- |
+   | A custom domain         | `https://your-domain/`             |
+   | GitHub Pages, org repo  | `https://<org>.github.io/<repo>/`  |
+   | GitHub Pages, user repo | `https://<user>.github.io/<repo>/` |
 
-   `<owner>` is whoever owns the repository. For a repo under an **organisation** that is
-   the org name, not your username — `https://sidereal-software.github.io/power-hour/`,
-   not `https://davner.github.io/power-hour/`.
+   If you set a custom domain, that is the one Spotify needs — the `github.io` address is
+   not what the browser will be at. For an org-owned repo the host is the **org** name, not
+   your username.
 
 4. Under **APIs used**, tick **Web API** and **Web Playback SDK**.
 5. Save, then copy the **Client ID**.
@@ -55,8 +58,13 @@ is required for anything that isn't loopback.
 
 Rather than assembling the URL by hand, open the deployed site: its setup screen prints the
 exact string with a copy button, computed from the real browser location by the same code
-that sends it to Spotify. Copy from there and a mismatch is impossible. **Settings → Pages**
-also shows the live address.
+that sends it to Spotify. Copy from there and a mismatch is impossible.
+
+> **Using a custom domain?** Set it in **Settings → Pages**, and keep
+> [`public/CNAME`](public/CNAME) in step with it. Vite copies `public/` into the build
+> verbatim, so the domain travels with the deploy rather than living only in repository
+> settings. The build uses relative asset paths, so the same output works at a domain root
+> or a `/repo/` subpath with no config change.
 
 ### 2. Turn on GitHub Pages
 
