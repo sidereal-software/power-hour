@@ -55,6 +55,10 @@ export function SetupScreen({
             <CardHeader>
               <CardTitle>Ready when you are</CardTitle>
               <CardDescription>
+                You'll sign in on Spotify's own page — this site never sees your password, and it
+                plays from your own account and playlists.
+              </CardDescription>
+              <CardDescription>
                 Requires Spotify Premium and a desktop browser. Playback happens in this tab.
               </CardDescription>
             </CardHeader>
