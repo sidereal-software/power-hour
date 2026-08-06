@@ -37,17 +37,26 @@ You only do this once.
 
 1. Open the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) → **Create app**.
 2. Name it anything.
-3. Under **Redirect URIs**, add your Pages URL — trailing slash included, exactly:
+3. Under **Redirect URIs**, add your Pages URL — trailing slash included:
 
    ```
-   https://<your-username>.github.io/power-hour/
+   https://<owner>.github.io/<repo>/
    ```
+
+   `<owner>` is whoever owns the repository. For a repo under an **organisation** that is
+   the org name, not your username — `https://sidereal-software.github.io/power-hour/`,
+   not `https://davner.github.io/power-hour/`.
 
 4. Under **APIs used**, tick **Web API** and **Web Playback SDK**.
 5. Save, then copy the **Client ID**.
 
-Spotify matches redirect URIs byte-for-byte, so the trailing slash matters. The app's setup
-screen prints the exact string to paste, with a copy button.
+Spotify matches redirect URIs **byte-for-byte**, so the trailing slash matters, and `https`
+is required for anything that isn't loopback.
+
+Rather than assembling the URL by hand, open the deployed site: its setup screen prints the
+exact string with a copy button, computed from the real browser location by the same code
+that sends it to Spotify. Copy from there and a mismatch is impossible. **Settings → Pages**
+also shows the live address.
 
 ### 2. Turn on GitHub Pages
 
