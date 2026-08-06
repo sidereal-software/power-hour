@@ -80,7 +80,12 @@ describe('usePowerHour', () => {
     await act(async () => {
       await result.current.launch({ choice: CHOICE, settings: SETTINGS, market: 'GB' })
     })
-    expect(api.getPlaylistTracks).toHaveBeenCalledWith('pl1', 'GB', expect.any(Function))
+    expect(api.getPlaylistTracks).toHaveBeenCalledWith(
+      'pl1',
+      'GB',
+      expect.any(Function),
+      expect.any(AbortSignal),
+    )
   })
 
   it('reads Liked Songs from the saved-tracks endpoint instead', async () => {

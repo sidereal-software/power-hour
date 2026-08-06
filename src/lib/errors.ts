@@ -12,3 +12,8 @@ export function errorMessage(err: unknown, fallback = 'Something went wrong.'): 
   }
   return fallback
 }
+
+/** True when a fetch was cancelled deliberately, which is not a failure to report. */
+export function isAbortError(err: unknown): boolean {
+  return err instanceof Error && err.name === 'AbortError'
+}

@@ -71,7 +71,14 @@ export default function App() {
           id: p.id,
           kind: 'playlist',
           name: p.name || 'Untitled playlist',
-          subtitle: [`${p.tracks?.total ?? '?'} tracks`, p.owner?.display_name]
+          // Only claim a size when the API actually reported one — "? tracks"
+          // is noise, and the real count shows on the loading screen anyway.
+          subtitle: [
+            typeof p.tracks?.total === 'number'
+              ? `${p.tracks.total.toLocaleString()} tracks`
+              : null,
+            p.owner?.display_name,
+          ]
             .filter(Boolean)
             .join(' · '),
           image: p.images?.[0]?.url ?? '',
@@ -213,6 +220,10 @@ export default function App() {
               onReroll={game.reroll}
               onSkip={game.skip}
               onQuit={() => void handleQuit()}
+              onCancelLoad={() => {
+                game.cancelLoad()
+                void handleQuit()
+              }}
             />
           )}
 

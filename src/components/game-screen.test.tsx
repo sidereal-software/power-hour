@@ -29,6 +29,7 @@ const state = (overrides: Partial<PowerHourState> = {}): PowerHourState => ({
     elapsedTotalMs: 15_000,
   },
   loading: null,
+  progress: null,
   error: null,
   trackCount: 40,
   ...overrides,
@@ -39,6 +40,7 @@ const handlers = () => ({
   onReroll: vi.fn(),
   onSkip: vi.fn(),
   onQuit: vi.fn(),
+  onCancelLoad: vi.fn(),
 })
 
 const renderScreen = (s = state(), h = handlers()) => {
@@ -138,8 +140,30 @@ describe('GameScreen — controls', () => {
 
 describe('GameScreen — states', () => {
   it('shows a loading message before the first round', () => {
-    renderScreen(state({ round: null, loading: 'Loading tracks… 120' }))
-    expect(screen.getByText('Loading tracks… 120')).toBeInTheDocument()
+    renderScreen(state({ round: null, loading: 'Loading tracks…' }))
+    expect(screen.getByText(/Loading tracks…/)).toBeInTheDocument()
+  })
+
+  it('reports how many tracks have loaded, and out of how many', () => {
+    renderScreen(
+      state({ round: null, loading: 'Loading tracks…', progress: { loaded: 1200, total: 5000 } }),
+    )
+    expect(screen.getByText('1,200 of 5,000')).toBeInTheDocument()
+  })
+
+  it('still reports progress when the playlist size is unknown', () => {
+    renderScreen(state({ round: null, loading: 'Loading tracks…', progress: { loaded: 300 } }))
+    expect(screen.getByText('300')).toBeInTheDocument()
+    expect(screen.queryByText(/ of /)).not.toBeInTheDocument()
+  })
+
+  it('offers a way out of a long load', async () => {
+    const user = userEvent.setup()
+    const { handlers: h } = renderScreen(
+      state({ round: null, loading: 'Loading tracks…', progress: { loaded: 900, total: 9000 } }),
+    )
+    await user.click(screen.getByRole('button', { name: /cancel/i }))
+    expect(h.onCancelLoad).toHaveBeenCalled()
   })
 
   it('shows an error with a way back', async () => {

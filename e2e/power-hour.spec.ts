@@ -179,6 +179,35 @@ test.describe('In-game controls', () => {
   })
 })
 
+test.describe('Cancelling a long load', () => {
+  test('a slow playlist can be abandoned and returns to the picker', async ({ page, spotify }) => {
+    spotify.stallTrackLoad(20_000)
+    await setShortRun(page)
+    await page.locator('ul li button', { hasText: 'Bangers' }).click()
+
+    await expect(page.getByText(/Loading tracks/)).toBeVisible({ timeout: 15_000 })
+    await page.getByRole('button', { name: /cancel/i }).click()
+
+    await expect(page.getByRole('heading', { name: 'Choose your playlist' })).toBeVisible()
+    // Abandoning is a choice, not a failure — no error surface should appear.
+    await expect(page.getByText(/Can't start this run/i)).toBeHidden()
+    expect(spotify.playCalls).toHaveLength(0)
+  })
+
+  test('a second attempt after cancelling still works', async ({ page, spotify }) => {
+    spotify.stallTrackLoad(20_000)
+    await setShortRun(page)
+    await page.locator('ul li button', { hasText: 'Bangers' }).click()
+    await expect(page.getByText(/Loading tracks/)).toBeVisible({ timeout: 15_000 })
+    await page.getByRole('button', { name: /cancel/i }).click()
+    await expect(page.getByRole('heading', { name: 'Choose your playlist' })).toBeVisible()
+
+    spotify.stallTrackLoad(0)
+    await page.locator('ul li button', { hasText: 'Bangers' }).click()
+    await expect(page.getByText(/dropping in at/)).toBeVisible({ timeout: 15_000 })
+  })
+})
+
 test.describe('Failure handling', () => {
   test('recovers from a stale device by transferring playback', async ({ page, spotify }) => {
     spotify.failNextPlay(404, 1)

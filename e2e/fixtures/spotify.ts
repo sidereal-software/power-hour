@@ -56,6 +56,10 @@ export interface SpotifyStub {
   setTracks: (tracks: StubTrackItem[]) => void
   /** Force a status code for the next N play calls. */
   failNextPlay: (status: number, times?: number) => void
+  /** Stall the track-list request, so a long load can be observed and cancelled. */
+  stallTrackLoad: (ms: number) => void
+  /** How many track-list requests were issued. */
+  trackRequests: () => number
 }
 
 export function makeTracks(count: number, overrides: Record<string, unknown> = {}) {
@@ -105,6 +109,8 @@ export const test = base.extend<{ spotify: SpotifyStub }>({
       ]
       let tracks = makeTracks(40)
       let forcedFailure: { status: number; remaining: number } | null = null
+      let stallMs = 0
+      let trackRequestCount = 0
 
       await page.addInitScript(() => {
         localStorage.setItem('ph.clientId', 'e2e-client-id')
@@ -124,8 +130,15 @@ export const test = base.extend<{ spotify: SpotifyStub }>({
             return json(user)
           case '/v1/me/playlists':
             return json({ items: playlists, next: null })
-          case '/v1/playlists/pl1/tracks':
+          case '/v1/playlists/pl1/tracks': {
+            trackRequestCount += 1
+            if (stallMs > 0) {
+              return new Promise<void>((resolve) => setTimeout(resolve, stallMs)).then(() =>
+                json({ items: tracks, next: null }),
+              )
+            }
             return json({ items: tracks, next: null })
+          }
           case '/v1/playlists/pl2/tracks':
             return json({ items: tracks.slice(0, 12), next: null })
           case '/v1/me/tracks':
@@ -180,6 +193,10 @@ export const test = base.extend<{ spotify: SpotifyStub }>({
         failNextPlay: (status, times = 1) => {
           forcedFailure = { status, remaining: times }
         },
+        stallTrackLoad: (ms) => {
+          stallMs = ms
+        },
+        trackRequests: () => trackRequestCount,
       })
     },
     { auto: true },

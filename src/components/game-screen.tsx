@@ -8,6 +8,7 @@ import {
   TriangleAlert,
   Volume1,
   Volume2,
+  X,
 } from 'lucide-react'
 
 import { CountdownRing } from '@/components/countdown-ring'
@@ -26,6 +27,7 @@ interface GameScreenProps extends PowerHourState {
   onReroll: () => void
   onSkip: () => void
   onQuit: () => void
+  onCancelLoad: () => void
 }
 
 export function GameScreen({
@@ -33,11 +35,13 @@ export function GameScreen({
   round,
   tick,
   loading,
+  progress,
   error,
   onTogglePause,
   onReroll,
   onSkip,
   onQuit,
+  onCancelLoad,
 }: GameScreenProps) {
   const [volume, setVolume] = React.useState(80)
 
@@ -94,7 +98,30 @@ export function GameScreen({
           </div>
         </div>
         <Skeleton className="mx-auto aspect-square w-[min(17rem,62vw)] rounded-full" />
-        <p className="text-muted-foreground text-center text-sm">{loading ?? 'Getting ready…'}</p>
+
+        <div className="space-y-4 text-center">
+          <p className="text-muted-foreground text-sm">
+            {loading ?? 'Getting ready…'}
+            {progress && (
+              <span className="tabular text-foreground ml-1 font-medium">
+                {progress.loaded.toLocaleString()}
+                {progress.total ? ` of ${progress.total.toLocaleString()}` : ''}
+              </span>
+            )}
+          </p>
+
+          {progress && progress.total ? (
+            <Progress
+              value={Math.min(100, (progress.loaded / progress.total) * 100)}
+              className="mx-auto max-w-sm"
+            />
+          ) : null}
+
+          {/* A few thousand tracks is a long series of requests — always offer an exit. */}
+          <Button variant="outline" size="sm" onClick={onCancelLoad}>
+            <X /> Cancel
+          </Button>
+        </div>
       </div>
     )
   }

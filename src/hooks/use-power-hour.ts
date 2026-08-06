@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import * as api from '@/lib/api'
 import * as playback from '@/lib/playback'
 import { unlockAudio } from '@/lib/chime'
-import { errorMessage } from '@/lib/errors'
+import { errorMessage, isAbortError } from '@/lib/errors'
 import {
   createGame,
   playableTracks,
@@ -28,6 +28,8 @@ export interface PowerHourState {
   tick: TickInfo | null
   /** Non-null while connecting the player or paging through tracks. */
   loading: string | null
+  /** Tracks fetched so far, and the playlist size when the API reports it. */
+  progress: { loaded: number; total?: number } | null
   error: string | null
   trackCount: number
 }
@@ -37,6 +39,7 @@ const INITIAL: PowerHourState = {
   round: null,
   tick: null,
   loading: null,
+  progress: null,
   error: null,
   trackCount: 0,
 }
@@ -44,6 +47,8 @@ const INITIAL: PowerHourState = {
 export function usePowerHour({ onFinish }: { onFinish: () => void }) {
   const [state, setState] = React.useState<PowerHourState>(INITIAL)
   const gameRef = React.useRef<Game | null>(null)
+  // Paging a few thousand tracks is many sequential requests; let the user bail.
+  const loadAbortRef = React.useRef<AbortController | null>(null)
   // Callbacks are handed to the imperative engine once; a ref keeps the latest
   // onFinish reachable without tearing down and rebuilding the game. Assigned in
   // an effect rather than during render — a render-phase write is not safe under
@@ -65,17 +70,21 @@ export function usePowerHour({ onFinish }: { onFinish: () => void }) {
       unlockAudio()
       setState({ ...INITIAL, loading: 'Starting the Spotify player…' })
 
+      const controller = new AbortController()
+      loadAbortRef.current = controller
+
       try {
         await playback.connectPlayer({
           onError: (message) => toast.error('Playback', { description: message }),
         })
 
-        patch({ loading: 'Loading tracks…' })
-        const onProgress = (n: number) => patch({ loading: `Loading tracks… ${n}` })
+        patch({ loading: 'Loading tracks…', progress: { loaded: 0 } })
+        const onProgress = (loaded: number, total?: number) =>
+          patch({ loading: 'Loading tracks…', progress: { loaded, total } })
         const raw =
           choice.kind === 'liked'
-            ? await api.getLikedTracks(market, onProgress)
-            : await api.getPlaylistTracks(choice.id, market, onProgress)
+            ? await api.getLikedTracks(market, onProgress, controller.signal)
+            : await api.getPlaylistTracks(choice.id, market, onProgress, controller.signal)
 
         const tracks = playableTracks(raw)
         if (tracks.length === 0) {
@@ -106,11 +115,16 @@ export function usePowerHour({ onFinish }: { onFinish: () => void }) {
           },
         })
 
-        patch({ loading: null, trackCount: tracks.length })
+        patch({ loading: null, progress: null, trackCount: tracks.length })
         await gameRef.current.start()
         return true
       } catch (err) {
-        patch({ loading: null, error: errorMessage(err) })
+        // A cancelled load is a choice, not a failure — leave the screen silent.
+        if (isAbortError(err)) {
+          patch({ loading: null, progress: null })
+          return false
+        }
+        patch({ loading: null, progress: null, error: errorMessage(err) })
         return false
       }
     },
@@ -127,7 +141,15 @@ export function usePowerHour({ onFinish }: { onFinish: () => void }) {
   const reroll = React.useCallback(() => void gameRef.current?.reroll(), [])
   const skip = React.useCallback(() => gameRef.current?.skip(), [])
 
+  /** Abort an in-flight track load. Safe to call when nothing is loading. */
+  const cancelLoad = React.useCallback(() => {
+    loadAbortRef.current?.abort()
+    loadAbortRef.current = null
+  }, [])
+
   const stop = React.useCallback(async () => {
+    loadAbortRef.current?.abort()
+    loadAbortRef.current = null
     await gameRef.current?.stop()
     gameRef.current = null
     setState(INITIAL)
@@ -143,5 +165,5 @@ export function usePowerHour({ onFinish }: { onFinish: () => void }) {
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [])
 
-  return { ...state, launch, togglePause, reroll, skip, stop }
+  return { ...state, launch, togglePause, reroll, skip, stop, cancelLoad }
 }

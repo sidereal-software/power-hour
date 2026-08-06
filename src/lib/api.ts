@@ -68,6 +68,8 @@ async function request<T>(
 interface Page<T> {
   items: T[]
   next: string | null
+  /** Size of the whole collection, not this page. Present on every paging object. */
+  total?: number
 }
 
 /* ── Account ───────────────────────────────────────────────────────── */
@@ -99,17 +101,19 @@ const TRACK_FIELDS =
 export async function getPlaylistTracks(
   playlistId: string,
   market?: string,
-  onProgress?: (loaded: number) => void,
+  onProgress?: (loaded: number, total?: number) => void,
+  signal?: AbortSignal,
 ): Promise<SpotifyTrack[]> {
   const tracks: SpotifyTrack[] = []
-  const params = new URLSearchParams({ limit: '100', fields: TRACK_FIELDS })
+  // `total` is not inside `fields`, so ask for it explicitly or it is omitted.
+  const params = new URLSearchParams({ limit: '100', fields: `total,${TRACK_FIELDS}` })
   if (market) params.set('market', market)
   let url: string | null = `/playlists/${playlistId}/tracks?${params}`
 
   while (url) {
-    const page: Page<{ track: SpotifyTrack | null }> = await request(url)
+    const page: Page<{ track: SpotifyTrack | null }> = await request(url, { signal })
     tracks.push(...page.items.map((i) => i?.track).filter((t): t is SpotifyTrack => Boolean(t)))
-    onProgress?.(tracks.length)
+    onProgress?.(tracks.length, page.total)
     url = page.next ? page.next.replace(BASE, '') : null
   }
   return tracks
@@ -117,7 +121,8 @@ export async function getPlaylistTracks(
 
 export async function getLikedTracks(
   market?: string,
-  onProgress?: (loaded: number) => void,
+  onProgress?: (loaded: number, total?: number) => void,
+  signal?: AbortSignal,
 ): Promise<SpotifyTrack[]> {
   const tracks: SpotifyTrack[] = []
   const params = new URLSearchParams({ limit: '50' })
@@ -125,9 +130,9 @@ export async function getLikedTracks(
   let url: string | null = `/me/tracks?${params}`
 
   while (url) {
-    const page: Page<{ track: SpotifyTrack | null }> = await request(url)
+    const page: Page<{ track: SpotifyTrack | null }> = await request(url, { signal })
     tracks.push(...page.items.map((i) => i?.track).filter((t): t is SpotifyTrack => Boolean(t)))
-    onProgress?.(tracks.length)
+    onProgress?.(tracks.length, page.total)
     url = page.next ? page.next.replace(BASE, '') : null
   }
   return tracks
