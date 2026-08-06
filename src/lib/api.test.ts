@@ -140,49 +140,139 @@ describe('pagination', () => {
   it('unwraps playlist track items and reports progress', async () => {
     const onProgress = vi.fn()
     fetchSpy
+      .mockResolvedValueOnce(json({ items: [{ track: makeTrack() }], total: 150, next: null }))
       .mockResolvedValueOnce(
-        json({
-          items: [{ track: makeTrack() }, { track: null }],
-          next: 'https://api.spotify.com/v1/playlists/pl1/tracks?offset=100',
-        }),
+        json({ items: [{ track: makeTrack() }, { track: null }], total: 150, next: null }),
       )
-      .mockResolvedValueOnce(json({ items: [{ track: makeTrack() }], next: null }))
+      .mockResolvedValueOnce(json({ items: [{ track: makeTrack() }], total: 150, next: null }))
 
-    const tracks = await api.getPlaylistTracks('pl1', 'US', onProgress)
-    expect(tracks).toHaveLength(2)
-    expect(onProgress).toHaveBeenCalledTimes(2)
+    const result = await api.getPlaylistTracks('pl1', { market: 'US', onProgress })
+    expect(result.tracks).toHaveLength(2)
+    expect(result.total).toBe(150)
+    expect(result.sampled).toBe(false)
+    expect(onProgress).toHaveBeenCalled()
   })
 
   it('passes market so is_playable is populated and tracks are relinked', async () => {
-    fetchSpy.mockResolvedValue(json({ items: [], next: null }))
-    await api.getPlaylistTracks('pl1', 'GB')
+    fetchSpy.mockResolvedValue(json({ items: [], total: 0, next: null }))
+    await api.getPlaylistTracks('pl1', { market: 'GB' })
     expect(fetchSpy.mock.calls[0][0]).toContain('market=GB')
   })
 
   it('omits market when the account country is unknown', async () => {
-    fetchSpy.mockResolvedValue(json({ items: [], next: null }))
-    await api.getPlaylistTracks('pl1', undefined)
+    fetchSpy.mockResolvedValue(json({ items: [], total: 0, next: null }))
+    await api.getPlaylistTracks('pl1', {})
     expect(fetchSpy.mock.calls[0][0]).not.toContain('market=')
   })
 
-  it('requests only the track fields the app reads', async () => {
-    fetchSpy.mockResolvedValue(json({ items: [], next: null }))
-    await api.getPlaylistTracks('pl1', 'US')
-    const url = fetchSpy.mock.calls[0][0] as string
-    expect(url).toContain('fields=')
-    expect(decodeURIComponent(url)).toContain('duration_ms')
+  it('requests only the track fields the app reads, plus the collection total', async () => {
+    fetchSpy.mockResolvedValue(json({ items: [], total: 0, next: null }))
+    await api.getPlaylistTracks('pl1', { market: 'US' })
+    const url = decodeURIComponent(fetchSpy.mock.calls[0][0] as string)
+    expect(url).toContain('duration_ms')
+    // `total` sits outside `fields`; without it there is no progress denominator.
+    expect(url).toContain('total')
+  })
+
+  it('costs one probe request for an empty collection', async () => {
+    fetchSpy.mockResolvedValue(json({ items: [], total: 0, next: null }))
+    const result = await api.getPlaylistTracks('pl1', {})
+    expect(result).toEqual({ tracks: [], total: 0, sampled: false })
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
   })
 
   it('pages through liked songs', async () => {
-    fetchSpy
-      .mockResolvedValueOnce(
-        json({
-          items: [{ track: makeTrack() }],
-          next: 'https://api.spotify.com/v1/me/tracks?offset=50',
-        }),
-      )
-      .mockResolvedValueOnce(json({ items: [{ track: makeTrack() }], next: null }))
-    await expect(api.getLikedTracks('US')).resolves.toHaveLength(2)
+    fetchSpy.mockResolvedValue(json({ items: [{ track: makeTrack() }], total: 50, next: null }))
+    const result = await api.getLikedTracks({ market: 'US' })
+    expect(result.total).toBe(50)
+    expect(result.sampled).toBe(false)
+  })
+})
+
+describe('sampling large collections', () => {
+  const offsetsFrom = (calls: unknown[][]) =>
+    calls
+      .map((c) => new URL(c[0] as string, 'https://api.spotify.com').searchParams.get('offset'))
+      .slice(1) // drop the probe
+      .map(Number)
+
+  it('reads every page when the collection fits under the cap', async () => {
+    // 300 tracks = 3 pages of 100, cap 1000 → no sampling.
+    fetchSpy.mockResolvedValue(json({ items: [{ track: makeTrack() }], total: 300, next: null }))
+    const result = await api.getPlaylistTracks('pl1', { maxTracks: 1000 })
+    expect(result.sampled).toBe(false)
+    // probe + 3 pages
+    expect(fetchSpy).toHaveBeenCalledTimes(4)
+    expect(offsetsFrom(fetchSpy.mock.calls).toSorted((a, b) => a - b)).toEqual([0, 100, 200])
+  })
+
+  it('reads only as many pages as the cap allows once past it', async () => {
+    fetchSpy.mockResolvedValue(json({ items: [{ track: makeTrack() }], total: 5000, next: null }))
+    const result = await api.getPlaylistTracks('pl1', { maxTracks: 1000 })
+    expect(result.sampled).toBe(true)
+    expect(result.total).toBe(5000)
+    // probe + 10 pages, not the 50 a full read would need.
+    expect(fetchSpy).toHaveBeenCalledTimes(11)
+  })
+
+  it('draws those pages from across the whole collection, not just the front', async () => {
+    fetchSpy.mockResolvedValue(json({ items: [{ track: makeTrack() }], total: 5000, next: null }))
+    await api.getPlaylistTracks('pl1', { maxTracks: 1000 })
+
+    const offsets = offsetsFrom(fetchSpy.mock.calls)
+    // A front-to-back read would be 0..900. Reaching the far end proves otherwise.
+    expect(Math.max(...offsets)).toBeGreaterThan(1000)
+    expect(new Set(offsets).size).toBe(offsets.length)
+  })
+
+  it('varies the sample between runs', async () => {
+    fetchSpy.mockResolvedValue(json({ items: [{ track: makeTrack() }], total: 5000, next: null }))
+    await api.getPlaylistTracks('pl1', { maxTracks: 1000 })
+    const first = offsetsFrom(fetchSpy.mock.calls).join()
+
+    fetchSpy.mockClear()
+    await api.getPlaylistTracks('pl1', { maxTracks: 1000 })
+    const second = offsetsFrom(fetchSpy.mock.calls).join()
+
+    expect(first).not.toBe(second)
+  })
+
+  it('samples liked songs the same way', async () => {
+    fetchSpy.mockResolvedValue(json({ items: [{ track: makeTrack() }], total: 4000, next: null }))
+    const result = await api.getLikedTracks({ maxTracks: 500 })
+    expect(result.sampled).toBe(true)
+    // 50 per page, cap 500 → 10 pages plus the probe.
+    expect(fetchSpy).toHaveBeenCalledTimes(11)
+  })
+
+  it('reads everything when no cap is given', async () => {
+    fetchSpy.mockResolvedValue(json({ items: [{ track: makeTrack() }], total: 500, next: null }))
+    const result = await api.getPlaylistTracks('pl1', {})
+    expect(result.sampled).toBe(false)
+    expect(fetchSpy).toHaveBeenCalledTimes(6)
+  })
+})
+
+describe('samplePageIndexes', () => {
+  it('returns every page when asked for at least as many as exist', () => {
+    expect(api.samplePageIndexes(4, 4)).toEqual([0, 1, 2, 3])
+    expect(api.samplePageIndexes(3, 10)).toEqual([0, 1, 2])
+  })
+
+  it('returns the requested count, distinct and in range', () => {
+    for (let i = 0; i < 200; i++) {
+      const picked = api.samplePageIndexes(50, 10)
+      expect(picked).toHaveLength(10)
+      expect(new Set(picked).size).toBe(10)
+      expect(Math.min(...picked)).toBeGreaterThanOrEqual(0)
+      expect(Math.max(...picked)).toBeLessThan(50)
+    }
+  })
+
+  it('covers the whole range over many draws, not just the start', () => {
+    const seen = new Set<number>()
+    for (let i = 0; i < 300; i++) for (const p of api.samplePageIndexes(50, 10)) seen.add(p)
+    expect(seen.size).toBe(50)
   })
 })
 

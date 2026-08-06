@@ -90,52 +90,138 @@ export async function getMyPlaylists(): Promise<SpotifyPlaylist[]> {
 }
 
 const TRACK_FIELDS =
-  'next,items(is_local,track(uri,id,name,duration_ms,is_playable,is_local,type,' +
+  'items(is_local,track(uri,id,name,duration_ms,is_playable,is_local,type,' +
   'artists(name),album(name,images)))'
 
-/**
- * Every playable track in a playlist, paginated.
- * `market` matters twice: it populates `is_playable` and it relinks tracks to
- * versions actually available in the user's country.
- */
-export async function getPlaylistTracks(
-  playlistId: string,
-  market?: string,
-  onProgress?: (loaded: number, total?: number) => void,
-  signal?: AbortSignal,
-): Promise<SpotifyTrack[]> {
-  const tracks: SpotifyTrack[] = []
-  // `total` is not inside `fields`, so ask for it explicitly or it is omitted.
-  const params = new URLSearchParams({ limit: '100', fields: `total,${TRACK_FIELDS}` })
-  if (market) params.set('market', market)
-  let url: string | null = `/playlists/${playlistId}/tracks?${params}`
+const PLAYLIST_PAGE_SIZE = 100
+const LIKED_PAGE_SIZE = 50
+/** Spotify tolerates this comfortably; higher mostly buys 429s. */
+const PAGE_CONCURRENCY = 6
 
-  while (url) {
-    const page: Page<{ track: SpotifyTrack | null }> = await request(url, { signal })
-    tracks.push(...page.items.map((i) => i?.track).filter((t): t is SpotifyTrack => Boolean(t)))
-    onProgress?.(tracks.length, page.total)
-    url = page.next ? page.next.replace(BASE, '') : null
-  }
-  return tracks
+export interface TrackLoadOptions {
+  /**
+   * Doubles as availability and relinking: it populates `is_playable` and swaps
+   * tracks for versions playable in the user's country.
+   */
+  market?: string
+  /**
+   * Soft ceiling on how many tracks to fetch. Above it, whole pages are drawn at
+   * random from across the collection instead of reading it front to back.
+   */
+  maxTracks?: number
+  onProgress?: (loaded: number, total?: number) => void
+  signal?: AbortSignal
 }
 
-export async function getLikedTracks(
-  market?: string,
-  onProgress?: (loaded: number, total?: number) => void,
-  signal?: AbortSignal,
-): Promise<SpotifyTrack[]> {
-  const tracks: SpotifyTrack[] = []
-  const params = new URLSearchParams({ limit: '50' })
-  if (market) params.set('market', market)
-  let url: string | null = `/me/tracks?${params}`
+export interface TrackLoadResult {
+  tracks: SpotifyTrack[]
+  /** Size of the whole collection, per Spotify. */
+  total: number
+  /** True when only a random subset of pages was read. */
+  sampled: boolean
+}
 
-  while (url) {
-    const page: Page<{ track: SpotifyTrack | null }> = await request(url, { signal })
-    tracks.push(...page.items.map((i) => i?.track).filter((t): t is SpotifyTrack => Boolean(t)))
-    onProgress?.(tracks.length, page.total)
-    url = page.next ? page.next.replace(BASE, '') : null
-  }
-  return tracks
+type TrackItem = { track: SpotifyTrack | null }
+
+/** `count` distinct page indexes drawn uniformly from `[0, pageCount)`. */
+export function samplePageIndexes(pageCount: number, count: number): number[] {
+  if (count >= pageCount) return Array.from({ length: pageCount }, (_, i) => i)
+  const chosen = new Set<number>()
+  while (chosen.size < count) chosen.add(Math.floor(Math.random() * pageCount))
+  return [...chosen].toSorted((a, b) => a - b)
+}
+
+/** Run `fn` over `items`, at most `limit` in flight. */
+async function mapWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<void>,
+): Promise<void> {
+  let cursor = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor
+      cursor += 1
+      await fn(items[index])
+    }
+  })
+  await Promise.all(workers)
+}
+
+/**
+ * Read a paged track collection.
+ *
+ * Reading a few thousand tracks front to back is dozens of sequential requests
+ * for a pool the game will only draw sixty songs from. Past `maxTracks` this
+ * instead picks whole pages at random across the collection, so a huge playlist
+ * still contributes songs from its middle and end rather than only its opening.
+ * Sampling is by page, so tracks arrive in contiguous runs — spread across the
+ * playlist, not a simple random sample of it.
+ */
+async function loadTracks(
+  buildUrl: (limit: number, offset: number) => string,
+  pageSize: number,
+  { maxTracks, onProgress, signal }: TrackLoadOptions,
+): Promise<TrackLoadResult> {
+  // One tiny request establishes the size before committing to the whole thing.
+  const probe: Page<TrackItem> = await request(buildUrl(1, 0), { signal })
+  const total = probe.total ?? 0
+  if (total === 0) return { tracks: [], total: 0, sampled: false }
+
+  const pageCount = Math.ceil(total / pageSize)
+  const wantPages = maxTracks
+    ? Math.min(pageCount, Math.max(1, Math.ceil(maxTracks / pageSize)))
+    : pageCount
+  const sampled = wantPages < pageCount
+  const pages = sampled
+    ? samplePageIndexes(pageCount, wantPages)
+    : Array.from({ length: pageCount }, (_, i) => i)
+
+  const expected = sampled ? Math.min(total, wantPages * pageSize) : total
+  const tracks: SpotifyTrack[] = []
+  onProgress?.(0, expected)
+
+  await mapWithConcurrency(pages, PAGE_CONCURRENCY, async (page) => {
+    const res: Page<TrackItem> = await request(buildUrl(pageSize, page * pageSize), { signal })
+    for (const item of res.items) {
+      if (item?.track) tracks.push(item.track)
+    }
+    onProgress?.(tracks.length, expected)
+  })
+
+  return { tracks, total, sampled }
+}
+
+export function getPlaylistTracks(
+  playlistId: string,
+  options: TrackLoadOptions = {},
+): Promise<TrackLoadResult> {
+  return loadTracks(
+    (limit, offset) => {
+      // `total` sits outside `fields`, so it must be requested explicitly.
+      const params = new URLSearchParams({
+        limit: String(limit),
+        offset: String(offset),
+        fields: `total,${TRACK_FIELDS}`,
+      })
+      if (options.market) params.set('market', options.market)
+      return `/playlists/${playlistId}/tracks?${params}`
+    },
+    PLAYLIST_PAGE_SIZE,
+    options,
+  )
+}
+
+export function getLikedTracks(options: TrackLoadOptions = {}): Promise<TrackLoadResult> {
+  return loadTracks(
+    (limit, offset) => {
+      const params = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+      if (options.market) params.set('market', options.market)
+      return `/me/tracks?${params}`
+    },
+    LIKED_PAGE_SIZE,
+    options,
+  )
 }
 
 /* ── Playback ──────────────────────────────────────────────────────── */

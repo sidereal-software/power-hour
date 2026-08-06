@@ -2,6 +2,13 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { makeTracks } from '@/test/factories'
+
+const loadResult = (tracks = makeTracks(40), extra = {}) => ({
+  tracks,
+  total: tracks.length,
+  sampled: false,
+  ...extra,
+})
 import type { PlaylistChoice } from '@/lib/spotify-types'
 
 vi.mock('@/lib/api', () => ({
@@ -49,7 +56,7 @@ const SETTINGS = { roundSeconds: 60, rounds: 3, chime: 'none' as const, allowRep
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.mocked(api.getPlaylistTracks).mockResolvedValue(makeTracks(40))
+  vi.mocked(api.getPlaylistTracks).mockResolvedValue(loadResult())
   vi.mocked(playback.connectPlayer).mockResolvedValue('device-1')
   vi.mocked(playback.getDeviceId).mockReturnValue('device-1')
 })
@@ -82,14 +89,12 @@ describe('usePowerHour', () => {
     })
     expect(api.getPlaylistTracks).toHaveBeenCalledWith(
       'pl1',
-      'GB',
-      expect.any(Function),
-      expect.any(AbortSignal),
+      expect.objectContaining({ market: 'GB', maxTracks: expect.any(Number) }),
     )
   })
 
   it('reads Liked Songs from the saved-tracks endpoint instead', async () => {
-    vi.mocked(api.getLikedTracks).mockResolvedValue(makeTracks(40))
+    vi.mocked(api.getLikedTracks).mockResolvedValue(loadResult())
     const { result } = setup()
     await act(async () => {
       await result.current.launch({
@@ -114,7 +119,7 @@ describe('usePowerHour', () => {
   })
 
   it('reports an empty playlist as an error rather than starting', async () => {
-    vi.mocked(api.getPlaylistTracks).mockResolvedValue([])
+    vi.mocked(api.getPlaylistTracks).mockResolvedValue(loadResult([]))
     const { result } = setup()
     await act(async () => {
       await result.current.launch({ choice: CHOICE, settings: SETTINGS })
@@ -133,7 +138,7 @@ describe('usePowerHour', () => {
   })
 
   it('warns when a short playlist cannot fill the round count', async () => {
-    vi.mocked(api.getPlaylistTracks).mockResolvedValue(makeTracks(2))
+    vi.mocked(api.getPlaylistTracks).mockResolvedValue(loadResult(makeTracks(2)))
     const { result } = setup()
     await act(async () => {
       await result.current.launch({

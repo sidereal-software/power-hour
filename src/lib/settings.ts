@@ -15,3 +15,10 @@ export const DEFAULT_SETTINGS: GameSettings = {
 }
 
 export const SETTINGS_KEY = 'ph.settings'
+
+/**
+ * Above this many tracks the loader samples random pages rather than reading a
+ * playlist front to back. A thousand candidates is far more than sixty rounds
+ * need, and it turns a fifty-request wait into a handful.
+ */
+export const MAX_POOL_TRACKS = 1000

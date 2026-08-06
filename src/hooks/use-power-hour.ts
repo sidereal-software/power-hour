@@ -13,7 +13,7 @@ import {
   type RoundInfo,
   type TickInfo,
 } from '@/lib/engine'
-import type { GameSettings } from '@/lib/settings'
+import { MAX_POOL_TRACKS, type GameSettings } from '@/lib/settings'
 import type { PlaylistChoice } from '@/lib/spotify-types'
 
 interface LaunchArgs {
@@ -81,12 +81,13 @@ export function usePowerHour({ onFinish }: { onFinish: () => void }) {
         patch({ loading: 'Loading tracks…', progress: { loaded: 0 } })
         const onProgress = (loaded: number, total?: number) =>
           patch({ loading: 'Loading tracks…', progress: { loaded, total } })
-        const raw =
+        const load = { market, maxTracks: MAX_POOL_TRACKS, onProgress, signal: controller.signal }
+        const result =
           choice.kind === 'liked'
-            ? await api.getLikedTracks(market, onProgress, controller.signal)
-            : await api.getPlaylistTracks(choice.id, market, onProgress, controller.signal)
+            ? await api.getLikedTracks(load)
+            : await api.getPlaylistTracks(choice.id, load)
 
-        const tracks = playableTracks(raw)
+        const tracks = playableTracks(result.tracks)
         if (tracks.length === 0) {
           patch({
             loading: null,
@@ -94,6 +95,13 @@ export function usePowerHour({ onFinish }: { onFinish: () => void }) {
               'No playable tracks in that playlist. Local files and tracks unavailable in your country are skipped.',
           })
           return false
+        }
+
+        if (result.sampled) {
+          // Never cap silently — the pool is not the whole playlist.
+          toast.info('Big playlist', {
+            description: `Drew a random ${tracks.length.toLocaleString()} songs from across all ${result.total.toLocaleString()}.`,
+          })
         }
 
         if (tracks.length < settings.rounds && !settings.allowRepeats) {

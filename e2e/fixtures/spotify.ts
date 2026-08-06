@@ -79,6 +79,13 @@ export function makeTracks(count: number, overrides: Record<string, unknown> = {
   }))
 }
 
+/** Serve a slice honouring `limit`/`offset`, as the real paging endpoints do. */
+function pageOf(all: StubTrackItem[], url: URL) {
+  const limit = Number(url.searchParams.get('limit') ?? all.length)
+  const offset = Number(url.searchParams.get('offset') ?? 0)
+  return { items: all.slice(offset, offset + limit), total: all.length, next: null }
+}
+
 export const test = base.extend<{ spotify: SpotifyStub }>({
   // `auto` so the Spotify stub is installed even for tests that only take { page };
   // Playwright skips fixtures a test does not destructure.
@@ -132,17 +139,16 @@ export const test = base.extend<{ spotify: SpotifyStub }>({
             return json({ items: playlists, next: null })
           case '/v1/playlists/pl1/tracks': {
             trackRequestCount += 1
+            const body = () => json(pageOf(tracks, url))
             if (stallMs > 0) {
-              return new Promise<void>((resolve) => setTimeout(resolve, stallMs)).then(() =>
-                json({ items: tracks, next: null }),
-              )
+              return new Promise<void>((resolve) => setTimeout(resolve, stallMs)).then(body)
             }
-            return json({ items: tracks, next: null })
+            return body()
           }
           case '/v1/playlists/pl2/tracks':
-            return json({ items: tracks.slice(0, 12), next: null })
+            return json(pageOf(tracks.slice(0, 12), url))
           case '/v1/me/tracks':
-            return json({ items: tracks, next: null })
+            return json(pageOf(tracks, url))
           case '/v1/me/player/play': {
             if (forcedFailure && forcedFailure.remaining > 0) {
               forcedFailure.remaining -= 1
